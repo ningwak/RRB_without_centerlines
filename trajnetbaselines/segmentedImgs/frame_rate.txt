@@ -9,3 +9,4 @@ DR_USA_Intersection_MA 1
 DR_USA_Roundabout_EP 1
 DR_USA_Roundabout_FT 1
 DR_USA_Roundabout_SR 1
+My_Merge_1 1

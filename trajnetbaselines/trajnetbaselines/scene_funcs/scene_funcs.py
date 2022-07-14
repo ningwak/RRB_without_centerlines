@@ -34,6 +34,7 @@ class scene_funcs(torch.nn.Module):
         for i in list1:
             array = np.round(cv2.imread(baseAdd_image + i + '.jpg',
                                         cv2.IMREAD_GRAYSCALE) / 255 - 1)  # reads the image, off-road is zero and road is -1
+
             self.image[i] = torch.tensor(1 + 2 * array, device=self.device)
 
         margin = 425
@@ -106,6 +107,7 @@ def resampler(img, resampled_dim, batch_size=1):
 def scene_preprocess(xy_copy, file_name, n_obs, resampling_dim, scene_funcs):
     batch_size = xy_copy.size(0)
     theta, xy_copy = augmentation.rotate_obs_to_vertical(xy_copy, n_obs)
+    # print(theta)
     rotated_half_scene, rotated_scene = augmentation.img_rotator(obs=xy_copy[:, n_obs - 1, 0, :],
                                                                  batch_size=batch_size, file_name=file_name,
                                                                  theta=theta,

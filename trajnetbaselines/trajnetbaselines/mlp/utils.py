@@ -136,8 +136,8 @@ def best_road(obs, pred, center_lines, device, k, iteration, epochs=None, num_ro
     min_dist_beg_obs, min_dist_end_obs = torch.min(dist_beg_obs, dim=1), torch.min(dist_end_obs, dim=1)
     min_dist_beg_pred, min_dist_end_pred = torch.min(dist_beg_pred, dim=1), torch.min(dist_end_pred, dim=1)
 
-    boolean_obs = torch.ones((min_dist_beg_obs.values.shape[0]), dtype=torch.float64).cuda()
-    boolean_pred = torch.ones((min_dist_beg_pred.values.shape[0]), dtype=torch.float64).cuda()
+    boolean_obs = torch.ones((min_dist_beg_obs.values.shape[0]), dtype=torch.float64) #.cuda()
+    boolean_pred = torch.ones((min_dist_beg_pred.values.shape[0]), dtype=torch.float64) #.cuda()
     # l2 = time.time()
 
     boolean_obs = (min_dist_beg_obs.indices > min_dist_end_obs.indices).type(torch.float64) * 10000 + 1
@@ -200,7 +200,7 @@ def extract_center_line_of_interset(obsrvation, prediction_p, center_line, devic
             else:
                 center_lines[i, j, :len(result[0]), 0] = result[0]
                 center_lines[i, j, :len(result[0]), 1] = result[1]
-            if (num_roads is not 1):
+            if (num_roads != 1):
                 if (len(result[2]) > 600):
                     center_lines[i, 1, :, 0] = result[2][:600]
                     center_lines[i, 1, :, 1] = result[3][:600]

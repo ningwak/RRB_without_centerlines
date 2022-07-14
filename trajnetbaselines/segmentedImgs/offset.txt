@@ -9,3 +9,4 @@ DR_USA_Intersection_MA 935.9 1060.9
 DR_USA_Roundabout_EP 930.1 1066
 DR_USA_Roundabout_FT 946.7 1046.8
 DR_USA_Roundabout_SR 892.9 1079.6
+My_Merge_1 12 -7.28

@@ -136,7 +136,8 @@ def main():
     parser.add_argument('--image_add', default='output/',
                         help='address to the folder to store qualitative images')
     args = parser.parse_args()
-    model = args.model_add+'.pkl'
+    # model = args.model_add+'.pkl'
+    model = 'output/final_models/RRB/RRB_M_sceneGeneralization.pkl'
     predictor = trajnetbaselines.Predictor.load(model)
     list_data = os.listdir(args.data_add)
     test_files = [i for i in list_data]

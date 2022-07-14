@@ -111,8 +111,8 @@ def img_rotator(obs, batch_size, file_name, theta, scene_funcs, device='cpu'):
     """
 
     scale = 1
-    if ('DJI' in file_name[0]):  # used for internal dataset
-        scale = 5
+    '''if ('DJI' in file_name[0]):  # used for internal dataset
+        scale = 5'''
 
     scene = scene_funcs.scene_data(obs.view(batch_size, 2), resampling=False, file_name=file_name)
     # Rotation adds some margins in the image which should be considered as off-road. As the values in the margins

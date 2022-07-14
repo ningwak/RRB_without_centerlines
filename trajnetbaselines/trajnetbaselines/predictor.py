@@ -10,6 +10,7 @@ from casadi import *
 from .utils import *
 from . import augmentation
 from .scene_funcs.scene_funcs import scene_preprocess
+import matplotlib.pyplot as plt
 
 visualize = 0
 use_mpc = 0
@@ -34,7 +35,7 @@ class Predictor(object):
     def load(filename):
         # torch.nn.Module.dump_patches = True
         with open(filename, 'rb') as f:
-            return torch.load(f)
+            return torch.load(f, map_location=torch.device('cpu'))
 
     def __call__(self, paths, n_obs=None, file_name=None, sample_rate=None, pixel_scale=None, scene_funcs=None,
                  store_image=0,
@@ -45,7 +46,8 @@ class Predictor(object):
         start_time = time.time()
         self.model.eval()
         self.model.resampling_dim = (38, 74)
-        device = self.model.device
+        # device = self.model.device
+        device = 'cpu'
         self.model.to(device)
         ped_id = paths[0][0].pedestrian
         frame_diff = paths[0][1].frame - paths[0][0].frame
@@ -58,22 +60,32 @@ class Predictor(object):
             scale = float(scene_funcs.pixel_scale_dict[file_name])
             offset = scene_funcs.offset_dict[file_name]
             xy_copy = xy.clone()
+            # print("xy copy before:", xy)
+
             xy_copy[:, :, :, 1] = scale * (
                     xy[:, :, :, 1] - offset[0])  # second dimension is the longer axes, horizontal one
+            # print(xy[:, :, :, 1] - offset[0])
             xy_copy[:, :, :, 0] = -scale * (xy[:, :, :, 0] - offset[1])
+            for i in range(0, len(xy_copy)):
+                for j in range(0, len(xy_copy[i])):
+                    a = [point[0] for point in xy_copy[i][j]]
+                    b = [point[1] for point in xy_copy[i][j]]
+                    plt.plot(a, b)
+            # plt.show())
             xy_copy_unrotated = xy_copy.clone()
             rotated_scene, resampled_scene, xy_copy, theta = scene_preprocess(xy_copy, [file_name], n_obs,
                                                                               self.model.resampling_dim, scene_funcs)
+            # print("xy copy 2:", xy_copy)
             pixel_scale = pixel_scale.to(device)
             center_line_rotated = augmentation.rotate_all_path_by_theta(
                 center_line[file_name + '.txt'].to(device=device), xy_copy[:, n_obs - 1:n_obs, 0:1], theta,
                 centerline=1)
             if 'RRB' in self.model.__class__.__name__:
-                prediction_nn, prediction_kd, prob, prediction_rrb, prediction_speed = self.model(
+                prediction_nn, prediction_kd, prob, prediction_rrb = self.model(
                     obs=xy_copy[:, :n_obs, :, :], scene=resampled_scene,
                     sample_rate=torch.tensor([sample_rate], device=device), pixel_scale=pixel_scale,
                     center_line_dict=center_line_rotated, rotated_scene=rotated_scene[0], file_name=file_name,
-                    margin=scene_funcs.return_margin([file_name]), prediction_truth=xy_copy[:, n_obs:, :, :])
+                    margin=scene_funcs.return_margin([file_name]), prediction_truth=xy_copy[:, n_obs:, :, :], kd=xy_copy[:, n_obs:n_obs + self.n_pred, 0, :][0].tolist())
             elif 'EDN' in self.model.__class__.__name__:
                 prediction_v, prediction_nn, prob, prediction_speed = self.model(obs=xy_copy[:, :n_obs, :, :],
                                                                                  scene=resampled_scene,
@@ -93,25 +105,26 @@ class Predictor(object):
                 device), prediction_kd[0, :, :, :2].to(device), prediction_rrb[0, :, :, :2].to(
                 device)  # as we have one batch
             prob = torch.nn.functional.softmax(prob, dim=0).cpu().numpy()
-            best_mode_real_nn = l2_dist(xy_copy[0, n_obs:], prediction_nn)
-            best_mode_real_rrb = l2_dist(xy_copy[0, n_obs:], prediction_rrb)
-            best_mode_real_kd = l2_dist(xy_copy[0, n_obs:], prediction_kd)
+            # print("xy copy:", xy_copy[0, n_obs:])
+            # print("prediction rrb:", prediction_rrb)
             if (use_mpc):
                 for i in range(prediction_rrb.shape[0]):
                     prediction_rrb[i] = mpc_fun(prediction_rrb[i], sample_rate, pixel_scale, n_pred,
                                                 xy_copy[:, :n_obs, :, :])[1:]  # since the output has 11
-            best_mode_prediction_nn = prediction_nn[best_mode_real_nn, :, :].reshape(-1, 2)  # torch.Size([n_pred, 2])
-            best_mode_prediction_rrb = prediction_rrb[best_mode_real_rrb, :, :].reshape(-1,
-                                                                                        2)  # torch.Size([n_pred, 2])
-            best_mode_prediction_kd = prediction_kd[best_mode_real_kd, :, :].reshape(-1, 2)  # torch.Size([n_pred, 2])
+            # print('number:', len(prediction_nn), len(prediction_rrb), len(prediction_kd))
+            best_mode_prediction_nn = prediction_nn[0, :, :].reshape(-1, 2)  # torch.Size([n_pred, 2])
+            best_mode_prediction_rrb = prediction_rrb[0, :, :].reshape(-1, 2)  # torch.Size([n_pred, 2])
+            best_mode_prediction_kd = prediction_kd[0, :, :].reshape(-1, 2)  # torch.Size([n_pred, 2])
             best_mode_prediction_rrb_unrotated = best_mode_prediction_rrb.clone()
             best_mode_prediction_kd_unrotated = best_mode_prediction_kd.clone()
             best_mode_prediction_nn_unrotated = best_mode_prediction_nn.clone()
             prediction_nn_rotated = prediction_nn.clone()
             prediction_kd_rotated = prediction_kd.clone()
             prediction_rrb_rotated = prediction_rrb.clone()
+            # print("best mode prediction rrb:", best_mode_prediction_rrb)
 
             rotation_enabled = 1  # if 1, it draws when we normalized the scene (for scene models) and if 0, draws without rotation.
+            # print(theta)
             best_mode_prediction_nn = augmentation.rotate_path_by_theta(best_mode_prediction_nn,
                                                                         center=xy_copy[:, self.n_obs - 1, 0, :],
                                                                         n_pred=n_pred,
@@ -140,7 +153,12 @@ class Predictor(object):
 
             test_time = start_time - time.time()
             scene_violation = offroad_detector(prediction_rrb_rotated, file_name, scene_funcs.image, prob)
+
             projected_back_traj_rrb = best_mode_prediction_rrb.clone()
+            # print("projected back traj rrb:", projected_back_traj_rrb)
+            '''a = [point[0] for point in best_mode_prediction_nn]
+            b = [point[1] for point in best_mode_prediction_nn]
+            plt.plot(a, b)'''
             projected_back_traj_rrb[:, 1] = best_mode_prediction_rrb[:, 1] / scale + offset[0]
             projected_back_traj_rrb[:, 0] = -best_mode_prediction_rrb[:, 0] / scale + offset[1]
 
@@ -167,3 +185,7 @@ class Predictor(object):
                        best_mode_prediction_kd_unrotated.unsqueeze(0))
         return [trajnettools.TrackRow(first_frame + i * frame_diff, ped_id, x, y) for i, (x, y) in
                 enumerate(projected_back_traj_rrb)], test_time, scene_violation, flag
+        # TODO: comment following lines, they are just for debugging
+        # print('projected_back_traj_kd:', projected_back_traj_kd)
+        # return [trajnettools.TrackRow(first_frame + i * frame_diff, ped_id, x, y) for i, (x, y) in
+        #         enumerate(projected_back_traj_kd)], test_time, scene_violation, flag

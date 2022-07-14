@@ -1,3 +1,5 @@
+import numpy as np
+import torch
 import torch.nn as nn
 from .utils import *
 
@@ -84,7 +86,7 @@ class RRB(torch.nn.Module):
 
     def forward(self, obs, prediction_truth=None, n_pred=None, center_line_dict=None, scene=None, sample_rate=None,
                 pixel_scale=None, scene_funcs=None, file_name=None, rotated_scene=None, epoch=None, margin=None,
-                iterations=None):
+                iterations=None, kd = None):
         """
         inputs: obs (tensor, shape=(n_batch, n_obs,n_nearby_objects(it depends on the scene),2) )
         n_pred is used for compatibility with LSTM model
@@ -169,41 +171,45 @@ class RRB(torch.nn.Module):
         last_speed = last_vel.pow(2).sum(dim=3).pow(0.5).unsqueeze(1)
         prediction_speed = last_speed * torch.ones([batch_size, self.M, self.n_pred, 1], device=obs.device)
 
-        # (2) Generate trajectory positions Using kalman filter
+        # Comment these lines if using IDM+MOBIL KD model (start)
+
+        # # (2) Generate trajectory positions Using kalman filter
         # prediction_pos = torch.zeros([batch_size, self.M, self.n_pred, 2], device=obs.device)
         # for i in range(batch_size):
         #    prediction_pos[i] = trajnetbaselines.kalman.predict_modified(obs[i,:,0])
-        #        
+        #
         # prediction_v = prediction_pos[:, :, 1:, :] - prediction_pos[:, :, :-1,:]
         # first_v = (prediction_pos[:, :, 0, :] -  obs[:, -1, 0:1, :]).unsqueeze(2)
         # prediction_v = torch.cat((first_v,prediction_v),dim=2)
         # prediction_speed = prediction_v.pow(2).sum(dim=3).pow(0.5).unsqueeze(3)
-
-        center_road = extract_center_line_of_interset(obs.detach(), prediction_pos.detach(), center_line_dict,
-                                                      obs.device, iterations, epoch, self.n_pred)
-        old_position = obs[:, -1, 0, :].unsqueeze(1).unsqueeze(1).repeat(1, 1, center_road.shape[2], 1)
-        d = (center_road - old_position).pow(2).sum(dim=3).pow(0.5)
-        indices = torch.tensor([], dtype=torch.float).to(device=obs.device)
-        multimodel_center_road_traj = torch.tensor([], dtype=torch.float).to(device=obs.device)
-        for k in range(self.M):  # number of modes of predictions
-            center_road_traj = torch.tensor([], dtype=torch.float, device=obs.device)
-            quant_err = 0 * prediction_speed[:, 0, 0]
-            for t in range(self.n_pred):
-                distances = torch.abs(d[:, k, :] - (prediction_speed[:, k, t] - quant_err))
-                min_value, indices = torch.min(distances, dim=1)
-                for j in range(batch_size):
-                    center_road[j, k, :indices[j], :] = 50000
-                temporal = torch.gather(center_road[:, k], 1, indices.view(-1, 1, 1).repeat(1, 1, 2)).squeeze(1)
-                old_position = temporal.unsqueeze(1).repeat(1, center_road.shape[2], 1)
-                d[:, k] = (center_road[:, k] - old_position).pow(2).sum(dim=2).pow(0.5)
-                center_road_traj = torch.cat((center_road_traj, temporal), dim=1)
-                center_road_traj_rshpd = center_road_traj.view(batch_size, -1, 2)
-                if t != 0:  # lets skip the first predicted point (since finding speed is difficult)
-                    mapped_speed = (center_road_traj_rshpd[:, -1:] - center_road_traj_rshpd[:, -2:-1]).pow(2).sum(
-                        2).pow(0.5)
-                    quant_err = mapped_speed - prediction_speed[:, k, t]
-            multimodel_center_road_traj = torch.cat((multimodel_center_road_traj, center_road_traj.unsqueeze(1)), dim=1)
-        multimodel_center_road_traj = multimodel_center_road_traj.view(batch_size, self.M, self.n_pred, 2).detach()
+        #
+        # center_road = extract_center_line_of_interset(obs.detach(), prediction_pos.detach(), center_line_dict,
+        #                                               obs.device, iterations, epoch, self.n_pred)
+        # old_position = obs[:, -1, 0, :].unsqueeze(1).unsqueeze(1).repeat(1, 1, center_road.shape[2], 1)
+        # d = (center_road - old_position).pow(2).sum(dim=3).pow(0.5)
+        # indices = torch.tensor([], dtype=torch.float).to(device=obs.device)
+        # multimodel_center_road_traj = torch.tensor([], dtype=torch.float).to(device=obs.device)
+        # for k in range(self.M):  # number of modes of predictions
+        #     center_road_traj = torch.tensor([], dtype=torch.float, device=obs.device)
+        #     quant_err = 0 * prediction_speed[:, 0, 0]
+        #     for t in range(self.n_pred):
+        #         distances = torch.abs(d[:, k, :] - (prediction_speed[:, k, t] - quant_err))
+        #         min_value, indices = torch.min(distances, dim=1)
+        #         for j in range(batch_size):
+        #             center_road[j, k, :indices[j], :] = 50000
+        #         temporal = torch.gather(center_road[:, k], 1, indices.view(-1, 1, 1).repeat(1, 1, 2)).squeeze(1)
+        #         old_position = temporal.unsqueeze(1).repeat(1, center_road.shape[2], 1)
+        #         d[:, k] = (center_road[:, k] - old_position).pow(2).sum(dim=2).pow(0.5)
+        #         center_road_traj = torch.cat((center_road_traj, temporal), dim=1)
+        #         center_road_traj_rshpd = center_road_traj.view(batch_size, -1, 2)
+        #         if t != 0:  # lets skip the first predicted point (since finding speed is difficult)
+        #             mapped_speed = (center_road_traj_rshpd[:, -1:] - center_road_traj_rshpd[:, -2:-1]).pow(2).sum(
+        #                 2).pow(0.5)
+        #             quant_err = mapped_speed - prediction_speed[:, k, t]
+        #     multimodel_center_road_traj = torch.cat((multimodel_center_road_traj, center_road_traj.unsqueeze(1)), dim=1)
+        # multimodel_center_road_traj = multimodel_center_road_traj.view(batch_size, self.M, self.n_pred, 2).detach()
+        # Comment these lines if using IDM+MOBIL KD model (end)
+        multimodel_center_road_traj = torch.Tensor([[kd]]) # comment this line if use center line
 
         # fix jumps for the predictions from obs to average behavior
         offset = obs[:, -1:, 0, 1:2] - multimodel_center_road_traj[:, :, 0,
@@ -255,7 +261,7 @@ class RRB(torch.nn.Module):
             3)  # because in the loss we have rho not the covariance
         reference_traj = torch.cat((mixed_mean, mixed_var, mixed_rho), dim=3)
         return reference_traj_noMixed, multimodel_center_road_traj, torch.zeros([batch_size, self.M],
-                                                                                device=obs.device), reference_traj, prediction_speed
+                                                                                device=obs.device), reference_traj
 
 
 class RRB_M(torch.nn.Module):
@@ -364,7 +370,7 @@ class RRB_M(torch.nn.Module):
 
     def forward(self, obs, prediction_truth=None, n_pred=None, center_line_dict=None, scene=None, sample_rate=None,
                 pixel_scale=None, scene_funcs=None, file_name=None, rotated_scene=None, epoch=None, margin=None,
-                iterations=None):
+                iterations=None, kd = None):
         """
         inputs: obs (tensor, shape=(n_batch, n_obs,n_nearby_objects(it depends on the scene),2) )
         n_pred is used for compatibility with LSTM model
@@ -502,6 +508,9 @@ class RRB_M(torch.nn.Module):
                     quant_err = mapped_speed - prediction_speed[:, k, t]
             multimodel_center_road_traj = torch.cat((multimodel_center_road_traj, center_road_traj.unsqueeze(1)), dim=1)
         multimodel_center_road_traj = multimodel_center_road_traj.view(batch_size, self.M, self.n_pred, 2).detach()
+        # print('multimodel_center_road_traj:', multimodel_center_road_traj)
+        multimodel_center_road_traj = torch.Tensor([[kd, kd]]) # comment this line if use center line
+        # print('multimodel_center_road_traj:', multimodel_center_road_traj)
 
         # fix jumps for the predictions from obs to average behavior
         offset = obs[:, -1:, 0, 1:2] - multimodel_center_road_traj[:, :, 0,
@@ -509,8 +518,8 @@ class RRB_M(torch.nn.Module):
         multimodel_center_road_traj[:, :, :, 1] = multimodel_center_road_traj[:, :, :, 1] + offset * 3 / 4
 
         center_line_v = (multimodel_center_road_traj[:, :, :, :] - obs[:, -1:, 0:1, :])
-        center_line_v[:, :, :, 0] = center_line_v[:, :, :, 0] + 70  # + 110
-        center_line_v[:, :, :, 1] = center_line_v[:, :, :, 1] + 0.5  # - 1
+        center_line_v[:, :, :, 0] = center_line_v[:, :, :, 0] + 70 # + 70  # + 110
+        center_line_v[:, :, :, 1] = center_line_v[:, :, :, 1] + 0.5 #+ 0.5  # - 1
 
         kd_embedded = torch.cat((self.input_embeddings(center_line_v[:, 0, :, :].view(batch_size, 1, -1)),
                                  self.input_embeddings(center_line_v[:, 1, :, :].view(batch_size, 1, -1))), 2)
@@ -555,7 +564,7 @@ class RRB_M(torch.nn.Module):
             3)  # because in the loss we have rho not the covariance
         reference_traj = torch.cat((mixed_mean, mixed_var, mixed_rho), dim=3)
 
-        return reference_traj_noMixed, multimodel_center_road_traj, prob, reference_traj, prediction_speed
+        return reference_traj_noMixed, multimodel_center_road_traj, prob, reference_traj
 
 
 class EDN(torch.nn.Module):

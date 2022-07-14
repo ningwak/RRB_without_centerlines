@@ -39,10 +39,11 @@ def offroad_detector(prediction, file_name, scene_info, prob=None):
     for i, modes in enumerate(prediction_clone):  # between different modes predicted
         for seq in modes:  # between n_obs + n_pred data points that we have
             # if(scene_info[file_name][(seq[0].astype(int)[0],seq[0].astype(int)[1])]==1):
+            # print('info:', (seq[0].type(torch.LongTensor)), (seq[1].type(torch.LongTensor)))
             if seq[0] >= scene_info[file_name].size(0) or seq[1] >= scene_info[file_name].size(1):
                 cnt[i] += 1  # Since the speed varies and margin is not enough is some cases  #cnt[i] += 1
-            elif scene_info[file_name][(seq[0].type(torch.LongTensor)), (seq[1].type(torch.LongTensor))] == 1:
-                cnt[i] += 1
+            '''elif scene_info[file_name][(seq[0].type(torch.LongTensor)), (seq[1].type(torch.LongTensor))] == 1:
+                cnt[i] += 1'''
 
     if (prob is None):
         return np.sum(cnt)
@@ -80,18 +81,19 @@ def draw_scene(scene_funcs, xy, file_name, rotated_scene, n_obs, n_pred, prob, o
     for i in range(n_obs - 1):
         xy_cpu = xy.cpu()
         aa = tuple(xy_cpu[0, i, 0, :] - xy_cpu[0, n_obs - 1, 0, :] + margin)
-        cv2.circle(rotated_scene_cpu, (aa[1], aa[0]), 5, (0, -1, 0), -1)  # green => observation
-        cv2.rectangle(rotated_scene_cpu, (aa[1] - 4, aa[0] - 4), (aa[1] + 4, aa[0] + 4), (0, -1, 0),
+        # print('aa:', int(aa[1]), int(aa[0]))
+        cv2.circle(rotated_scene_cpu, (int(aa[1]), int(aa[0])), 5, (0, -1, 0), -1)  # green => observation
+        cv2.rectangle(rotated_scene_cpu, (int(aa[1]) - 4, int(aa[0]) - 4), (int(aa[1]) + 4, int(aa[0]) + 4), (0, -1, 0),
                       -1)  # green => observation
     aa = tuple(xy_cpu[0, i + 1, 0, :] - xy_cpu[0, n_obs - 1, 0, :] + margin)
-    # cv2.circle(rotated_scene_cpu,(aa[1],aa[0]), 10, (0,-1,0), -1)  # green => observation
-    cv2.rectangle(rotated_scene_cpu, (aa[1] - 10, aa[0] - 10), (aa[1] + 10, aa[0] + 10), (0, -1, 0),
+    # cv2.circle(rotated_scene_cpu,(int(aa[1,int(aa[0])), 10, (0,-1,0), -1)  # green => observation
+    cv2.rectangle(rotated_scene_cpu, (int(aa[1]) - 10, int(aa[0]) - 10), (int(aa[1]) + 10, int(aa[0]) + 10), (0, -1, 0),
                   2)  # green => observation
     for i in range(xy_cpu.shape[2] - 1):  # drawing other agents
         veh1 = xy_cpu[0, n_obs - 1, i + 1, :]
         if (veh1[0] == veh1[0] and veh1[1] == veh1[1]):
             aa = tuple(veh1 - xy_cpu[0, n_obs - 1, 0, :] + margin)
-            cv2.rectangle(rotated_scene_cpu, (aa[1] - 10, aa[0] - 10), (aa[1] + 10, aa[0] + 10), (0, -1, 0),
+            cv2.rectangle(rotated_scene_cpu, (int(aa[1]) - 10, int(aa[0]) - 10), (int(aa[1]) + 10, int(aa[0]) + 10), (0, -1, 0),
                           2)  # green => observation
 
     colors = [(-1, -1, 0), (0, -1, -1), (-1, 0, -1),
@@ -110,7 +112,7 @@ def draw_scene(scene_funcs, xy, file_name, rotated_scene, n_obs, n_pred, prob, o
             for i in range(n_pred):
                 out = pred_m.cpu()
                 aa = tuple(out[i, :] - xy_cpu[0, n_obs - 1, 0, :] + margin)
-                cv2.circle(rotated_scene_cpu, (aa[1], aa[0]), 5, color, -1)
+                cv2.circle(rotated_scene_cpu, (int(aa[1]), int(aa[0])), 5, color, -1)
 
             cv2.putText(rotated_scene_cpu, 'RRB', placement, cv2.FONT_HERSHEY_SIMPLEX, 0.5, color)
 
@@ -122,7 +124,7 @@ def draw_scene(scene_funcs, xy, file_name, rotated_scene, n_obs, n_pred, prob, o
             for i in range(n_pred):
                 out = pred_m.cpu()
                 aa = tuple(out[i, :] - xy_cpu[0, n_obs - 1, 0, :] + margin)
-                cv2.circle(rotated_scene_cpu, (aa[1], aa[0]), 5, color, -1)
+                cv2.circle(rotated_scene_cpu, (int(aa[1]), int(aa[0])), 5, color, -1)
 
             cv2.putText(rotated_scene_cpu, 'EDN', placement, cv2.FONT_HERSHEY_SIMPLEX, 0.5, color)
             size_decrease -= 1
@@ -133,7 +135,7 @@ def draw_scene(scene_funcs, xy, file_name, rotated_scene, n_obs, n_pred, prob, o
             for i in range(n_pred):
                 out = pred_m.cpu()
                 aa = tuple(out[i, :] - xy_cpu[0, n_obs - 1, 0, :] + margin)
-                cv2.circle(rotated_scene_cpu, (aa[1], aa[0]), 5, color, -1)
+                cv2.circle(rotated_scene_cpu, (int(aa[1]), int(aa[0])), 5, color, -1)
 
             cv2.putText(rotated_scene_cpu, 'KD', placement, cv2.FONT_HERSHEY_SIMPLEX, 0.5, color)
             size_decrease -= 1
@@ -141,12 +143,13 @@ def draw_scene(scene_funcs, xy, file_name, rotated_scene, n_obs, n_pred, prob, o
     # ground truth prediction
     for i in range(n_pred):
         aa = tuple(xy_cpu[0, i + n_obs, 0, :] - xy_cpu[0, n_obs - 1, 0, :] + margin)
-        cv2.circle(rotated_scene_cpu, (aa[1], aa[0]), 4, (0, 0, 0), -1)  # black => ground truth
+        cv2.circle(rotated_scene_cpu, (int(aa[1]), int(aa[0])), 4, (0, 0, 0), -1)  # black => ground truth
 
     # save to disk
     import os
     directory = '/output/generated_pics/'
     if not os.path.exists(directory):
+        print('make')
         os.makedirs(directory)
     cv2.imwrite(directory + 'results_' + str(
         file_name) + '_' + str(ped_id) + '-' + str(first_frame) + '_' + model_name + '.jpg',

@@ -23,6 +23,8 @@ from .scene_funcs.scene_funcs import scene_funcs, scene_preprocess, nearest_poin
 
 scene_loss = 0
 use_mpc = 0
+sampled = 0
+
 
 class Trainer(object):
     def __init__(self, timestamp, model=None, criterion=None, optimizer=None, lr_scheduler=None,
@@ -60,7 +62,7 @@ class Trainer(object):
         for epoch in range(start_epoch, start_epoch + epochs):
             self.train(train_scenes, epoch, out)  # train the model
             self.val(val_scenes, epoch)
-            if (epoch % 2 == 0):
+            if (epoch % 2 == 0 and wholedata):
                 Predictor(self.model, self.n_obs, self.n_pred, scale=self.scale).save(out + '.epoch{}'.format(epoch))
         Predictor(self.model, self.n_obs, self.n_pred, scale=self.scale).save(out)  # saves the final model
 
@@ -602,7 +604,7 @@ def main(epochs=35):
         with open(
                 "output/final_models/EDN/EDN_M_sceneGeneralization.pkl.state_dict",
                 'rb') as f:
-            pretrained_dict = torch.load(f)
+            pretrained_dict = torch.load(f, map_location=torch.device('cpu'))
         trained_blocks = ['encoder_traj', 'decoder', 'encoder_vehs', 'regressor', 'cnn']
         model.load_state_dict(pretrained_dict, strict=False)
         for i in model.named_parameters():
@@ -621,7 +623,7 @@ def main(epochs=35):
     if args.load_state:
         print("Loading Model Dict")
         with open(args.load_state, 'rb') as f:
-            checkpoint = torch.load(f)
+            checkpoint = torch.load(f, map_location=torch.device('cpu'))
         pretrained_state_dict = checkpoint['state_dict']
         model.load_state_dict(pretrained_state_dict, strict=False)
         model = model.to(args.device)
