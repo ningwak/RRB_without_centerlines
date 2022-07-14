@@ -14,7 +14,9 @@ class Reader(object):
 
     :param scene_type: None -> numpy.array, 'rows' -> TrackRow and SceneRow, 'paths': grouped rows (primary pedestrian first)
     """
-    def __init__(self, input_file, scene_type=None):
+    def __init__(self, input_file, scene_id=None, scene_type=None):
+        self.scene_id = scene_id
+        print("init")
         if scene_type is not None and scene_type not in {'rows', 'paths'}:
             raise Exception('scene_type not supported')
         self.scene_type = scene_type
@@ -29,23 +31,27 @@ class Reader(object):
         self.frame_rate_dict = dict(zip(lines[::2], lines[1::2]))   
         
     def read_file(self, input_file):
-        #pdb.set_trace()
         with open(input_file, 'r') as f:
+            # print(f)
             for line in f:
+                # print(line)
                 line = json.loads(line)
-
-                track = line.get('track')
-                if track is not None:                   				    
-                    row = TrackRow(track['f'], track['p'], track['x'], track['y'])
-                    #if input_file=='../trajnetdataset/output/train/HondaFunabori.ndjson' and row.frame==2502:	    
-                        #pdb.set_trace()
-                    self.tracks_by_frame[row.frame].append(row)
-                    #pdb.set_trace()
-                    continue
                 scene = line.get('scene')
                 if scene is not None:
-                    row = SceneRow(scene['id'], scene['p'], scene['s'], scene['e'])
-                    self.scenes_by_id[row.scene] = row
+                    if scene['id'] == self.scene_id:
+                        start =  scene['s']
+                        self.start = start
+                        end = scene['e']
+                        row = SceneRow(scene['id'], scene['p'], scene['s'], scene['e'])
+                        self.scenes_by_id[row.scene] = row
+
+                track = line.get('track')
+                if track is not None:
+                    if track['f'] <= end and track['f'] >= start:
+                        row = TrackRow(track['f'], track['p'], track['x'], track['y'])
+                        self.tracks_by_frame[row.frame].append(row)
+                    #pdb.set_trace()
+                    continue
                     
     def scenes(self, randomize=False, limit=0, ids=None, sample=None):
         scene_ids = self.scenes_by_id.keys()

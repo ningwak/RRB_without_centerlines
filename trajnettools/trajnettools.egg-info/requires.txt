@@ -1,0 +1,7 @@
+
+[plot]
+matplotlib
+
+[test]
+pylint
+pytest
